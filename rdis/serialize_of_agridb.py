@@ -37,9 +37,13 @@ def get_all_data(db) -> chain:
     return chain(*data_list)
 
 
-def dump_data(name, data):
+def dump_data(name, key):
+    data = get_all_data(name)
+    d = {}
+    for i in data:
+        d[i[key]] = i
     with shelve.open('../agridb') as f:
-        f[name] = data
+        f[name] = d
 
 
 def load_data(name) -> dict:
@@ -57,14 +61,22 @@ def print_data(name, count=10) -> None:
                 break
 
 
+def create_relation(name, relation_name, key, val, group=True):
+    data = load_data(name)
+    d = {}
+    with shelve.open('../agridb') as f:
+        if group:
+            for i in data.values():
+                d[i[key]] = d.get(i[key], []) + [i[val]]
+            f[relation_name] = d
+        else:
+            for i in data.values():
+                d[i[key]] = i[val]
+            f[relation_name] = d
+
+
 if __name__ == '__main__':
-    print_data('crop')
-    # data = load_data('crop')
-    # for i in data:
-    #     print(i)
-    # # data = get_all_data('household')
-    # data = load_data('crop')
-    # d = {}
-    # for i in data:
-    #     d[i['id']] = i
-    # dump_data('crop', d)
+    dump_data('farmerinsurance', 'id')
+    create_relation('farmerinsurance', 'member_pk_farmer_insurance_pk_link', 'member', 'id', False)
+    print_data('member_pk_farmer_insurance_pk_link', 100)
+
