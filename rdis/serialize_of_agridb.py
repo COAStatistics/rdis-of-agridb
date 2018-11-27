@@ -1,6 +1,7 @@
 import linecache
 import requests
 import shelve
+from pprint import pprint
 from itertools import chain
 from json import loads
 from sys import exc_info
@@ -67,16 +68,29 @@ def create_relation(name, relation_name, key, val, group=True):
     with shelve.open('../agridb') as f:
         if group:
             for i in data.values():
-                d[i[key]] = d.get(i[key], []) + [i[val]]
+                if i.get(key):
+                    d[i[key]] = d.get(i[key], []) + [i[val]]
             f[relation_name] = d
         else:
             for i in data.values():
-                d[i[key]] = i[val]
+                if i.get(key):
+                    d[i[key]] = i[val]
             f[relation_name] = d
 
 
-if __name__ == '__main__':
-    dump_data('farmerinsurance', 'id')
-    create_relation('farmerinsurance', 'member_pk_farmer_insurance_pk_link', 'member', 'id', False)
-    print_data('member_pk_farmer_insurance_pk_link', 100)
+def inspection_distinct(table_name):
+    with shelve.open('../agridb') as f:
+        data = {}
+        for k, v in f[table_name].items():
+            data[v['member']] = data.get(v['member'], 0) + 1
+        for i, j in data.items():
+            if j > 1:
+                print(i, j)
 
+
+if __name__ == '__main__':
+    # inspection_distinct('tenanttransfer')
+    # dump_data('tenant', 'id')
+    create_relation('tenant', 'owner_pk_tenant_pk_link', 'owner', 'id')
+    # print_data('member_pk_tenant_pk_link', 10)
+    pprint(load_data('owner_pk_tenant_pk_link'))
