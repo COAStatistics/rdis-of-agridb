@@ -21,24 +21,40 @@ def load_sample(num) -> None:
             obj = simple_obj_creator(line, is_person=False)
             exist = dg.is_exist(obj.id)
             if exist:
-                household_data(obj)
+                extract_data(obj)
             else:
-                print(obj, exist)
+                ...
             if i == 10000:
                 break
 
 
-def household_data(samp, exist=True):
-    data = []
+def extract_data(samp, exist=True):
+    members = []
+    declaration = set()
+    disaster = []
+    livestock = {}
+
     if exist:
         household = dg.get_household(samp.id)
         for member in household:
-            extract_data(member)
+            person_data = member_data(member)
+            members.append(person_data)
+
+            declaration_data = dg.get_declaration(member['id'])
+            if declaration_data:
+                declaration = declaration.union(declaration_data)
+
+            disaster_data = dg.get_disaster(member['id'])
+            if disaster_data:
+                disaster += disaster_data
+
+            livestock_data = dg.get_livestock(member['app_id'])
+
     else:
-        extract_data(samp, exist)
+        member_data(samp, exist)
 
 
-def extract_data(member, exist=True):
+def member_data(member, exist=True):
     person_data = [''] * 11
     if exist:
         person_data[0] = str(YEAR - int(member['birth'][:4]))
@@ -46,9 +62,10 @@ def extract_data(member, exist=True):
         person_data[2] = member['code']
         person_data[3] = dg.get_farmer_insurance(member['id'])
         person_data[4] = dg.get_elder_allowance(member['id'])
-        print(person_data)
+        person_data[10] = dg.get_landlord_or_tenant(member['id'])
+        return person_data
     else:
-        ...
+        return person_data
 
 
 if __name__ == '__main__':
