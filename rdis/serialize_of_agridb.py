@@ -89,8 +89,5 @@ def inspection_distinct(table_name):
 
 
 if __name__ == '__main__':
-    # inspection_distinct('tenanttransfer')
-    # dump_data('tenant', 'id')
-    create_relation('tenant', 'owner_pk_tenant_pk_link', 'owner', 'id')
-    # print_data('member_pk_tenant_pk_link', 10)
-    pprint(load_data('owner_pk_tenant_pk_link'))
+    print_data('appid_member_pk_link', 10)
+    # pprint(load_data('owner_pk_tenant_pk_link'))
