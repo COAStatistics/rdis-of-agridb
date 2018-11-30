@@ -34,11 +34,19 @@ class DataGenerator:
         __DPTPL = f['declare_pk_transfercrop_pk_link']
         __TRANSFER_CROP = f['transfercrop']
         __CROP = f['crop']
-        __FALLOW_TRANSFPER_CROP = ''
+        __FALLOW_TRANSFPER = f['fallowtransfer']
+        __MPFTPK = f['member_pk_fallowtransfer_pk_link']
         __MDPL = f['member_disaster_pk_link']
         __DISASTER = f['disaster']
         __EVENT = f['disasterevent']
         __LIVESTOCK = f['livestock_result']
+        __ALPL = f['appid_livestock_pk_link']
+        __TENANTTRANS = f['tenanttransfer']
+        __MPTTPL = f['member_pk_tenanttransfer_pk_link']
+        __LANDLORD_RENT = f['landlordrent']
+        __MPLLRPL = f['member_pk_landlordrent_pk_link']
+        __LANDLORD_RETIRE = f['landlordretire']
+        __MPLLRTPL = f['member_pk_landlordretire_pk_link']
 
     @classmethod
     def is_exist(cls, appid) -> bool:
@@ -55,8 +63,8 @@ class DataGenerator:
         household = []
         for i in cls.__HNMPL[sample['household']]:
             member = cls.__get_member(i)
-            member['code'] = cls.__CODE[member['code']]
-            member['role'] = cls.__ROLE[member['role']]
+            member['code'] = cls.__CODE.get(member['code'])
+            member['role'] = cls.__ROLE.get(member['role'])
             household.append(member)
         return household
 
@@ -95,8 +103,19 @@ class DataGenerator:
         return dcl
 
     @classmethod
-    def get_disaster(cls, appid):
-        disaster = []
+    def get_fallow_transfer(cls, appid) -> list:
+        fallow_trans = []
+        trans_pk = cls.__MPFTPK.get(appid)
+        if trans_pk:
+            for i in trans_pk:
+                trans = cls.__FALLOW_TRANSFPER.get(i)
+                crop = cls.__CROP[trans['crop']]['name']
+                fallow_trans.append([crop, trans['subsidy'], trans['period']])
+        return fallow_trans
+
+    @classmethod
+    def get_disaster(cls, appid) -> list:
+        disaster = {}
         disaster_pk = cls.__MDPL.get(appid)
         if disaster_pk:
             for i in disaster_pk:
@@ -106,9 +125,61 @@ class DataGenerator:
                 area = round(dis['area'], 4)
                 subsidy = dis['subsidy']
                 if area > 0:
-                    disaster.append([event, crop, area, subsidy])
-            return disaster
+                    l = disaster.get((event, crop))
+                    if l:
+                        l[2] = round(l[2]+area, 4)
+                        l[3] += subsidy
+                    else:
+                        disaster[(event, crop)] = [event, crop, area, subsidy]
+        return list(disaster.values())
 
     @classmethod
     def get_livestock(cls, appid):
-        ...
+        result = {}
+        livestock_pk = cls.__ALPL.get(appid)
+        if livestock_pk:
+            for i in livestock_pk:
+                livestock = [None] * 7
+                info = cls.__LIVESTOCK.get(i)
+
+    @classmethod
+    def get_sb_subsidy(cls, member) -> list:
+        tenant_trans = cls.__get_tenant_transfer(member['id'])
+        landlord_rent = cls.__get_landlord_rent(member['id'])
+        landlord_retire = cls.__get_landlord_retire(member['id'])
+        name = member['name'] if member['name'] else ''
+        return [name, tenant_trans, landlord_rent, landlord_retire]
+
+    @classmethod
+    def __get_tenant_transfer(cls, appid) -> int:
+        subsidy = 0
+        tenant_trans_pk = cls.__MPTTPL.get(appid)
+        if tenant_trans_pk:
+            for i in tenant_trans_pk:
+                tenant_trans = cls.__TENANTTRANS.get(i)
+                subsidy += tenant_trans['subsidy']
+        return subsidy
+
+    @classmethod
+    def __get_landlord_rent(cls, appid) -> int:
+        subsidy = 0
+        llr_pk = cls.__MPLLRPL.get(appid)
+        if llr_pk:
+            for i in llr_pk:
+                llr = cls.__LANDLORD_RENT.get(i)
+                subsidy += llr['subsidy']
+        return subsidy
+
+    @classmethod
+    def __get_landlord_retire(cls, appid) -> int:
+        subsidy = 0
+        llr_pk = cls.__MPLLRTPL.get(appid)
+        if llr_pk:
+            for i in llr_pk:
+                llr = cls.__LANDLORD_RETIRE.get(i)
+                subsidy += llr['subsidy']
+        return subsidy
+
+
+
+
