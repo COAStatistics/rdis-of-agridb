@@ -157,7 +157,7 @@ def extract_data(samp, exist=True):
                 livestock.update(livestock_data)
 
             sb_sbdy_data = dg.get_sb_subsidy(member, samp)
-            if any(i > 0 for i in sb_sbdy_data[1:]):
+            if any(int(i) > 0 for i in sb_sbdy_data[1:]):
                 sb_sbdy.append(sb_sbdy_data)
     else:
         person_data = member_data(samp, exist)
@@ -170,7 +170,7 @@ def member_data(member, exist=True):
     person_data = [''] * 11
     appid = member['app_id'] if exist else member.id
     if exist:
-        person_data[0] = int(member['birth'][:4]) - 1911
+        person_data[0] = str(int(member['birth'][:4]) - 1911)
         person_data[1] = member['role']
         person_data[2] = member['code']
         person_data[3] = dg.get_farmer_insurance(member['id'])
@@ -180,7 +180,7 @@ def member_data(member, exist=True):
     if appid in INSURANCE_DICT:
         for index, i in enumerate(INSURANCE_DICT.get(appid), start=5):
             if i > 0:
-                person_data[index] = i
+                person_data[index] = format(i, '8,d')
     return person_data
 
 
@@ -188,7 +188,7 @@ def generate_json_data(sample, birthday, household, declaration, fallow_transfer
     data = OrderedDict()
     data['name'] = sample.name
     data['address'] = sample.addr
-    data['birthday'] = birthday
+    data['birthday'] = str(birthday)
     data['farmerId'] = sample.id
     data['telephone'] = sample.tel
     data['layer'] = sample.layer
@@ -217,4 +217,4 @@ if __name__ == '__main__':
             break
     dg = dg(sample_num)
     init_data(sample_num)
-    output_josn_data(OFFICIAL_DATA)
+    # output_josn_data(OFFICIAL_DATA)

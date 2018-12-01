@@ -115,11 +115,12 @@ class DataGenerator:
             for i in trans_pk:
                 trans = cls.__FALLOW_TRANSFPER.get(i)
                 crop = cls.__CROP[trans['crop']]['name']
-                fallow_trans.append([crop, trans['subsidy'], trans['period']])
+                fallow_trans.append([crop, str(trans['subsidy']), trans['period']])
         return fallow_trans
 
     @classmethod
     def get_disaster(cls, appid) -> list:
+        reuslt = []
         disaster = {}
         disaster_pk = cls.__MDPL.get(appid)
         if disaster_pk:
@@ -136,7 +137,11 @@ class DataGenerator:
                         l[3] += subsidy
                     else:
                         disaster[(event, crop)] = [event, crop, area, subsidy]
-        return list(disaster.values())
+            for i in disaster.values():
+                i[2] = str(i[2])
+                i[3] = str(i[3])
+                reuslt.append(i)
+        return reuslt
 
     @classmethod
     def get_livestock(cls, appid):
@@ -174,15 +179,15 @@ class DataGenerator:
             field_name = k[1]
             livestock[0] = k[4]
             livestock[1] = k[2]
-            livestock[2] = count_type.get('在養量', 0)
-            livestock[3] = count_type.get('屠宰量', 0)
+            livestock[2] = str(count_type.get('在養量', 0))
+            livestock[3] = str(count_type.get('屠宰量', 0))
             livestock[4] = '無'
             livestock[5] = 0
             livestock[6] = '107' if k[3] == 2018 else '106'
 
             if re.match('[^蛋].*[雞|鴨|鵝|鵪鶉|鴿]', livestock[1].strip()) or livestock[1].strip().find('蛋鴨') != -1:
-                if livestock[2] == 0:
-                    if livestock[3] == 0:
+                if livestock[2] == '0':
+                    if livestock[3] == '0':
                         break
                     else:
                         livestock[2] = '出清'
@@ -219,34 +224,34 @@ class DataGenerator:
         return [name, tenant_trans, landlord_rent, landlord_retire]
 
     @classmethod
-    def __get_tenant_transfer(cls, appid) -> int:
+    def __get_tenant_transfer(cls, appid) -> str:
         subsidy = 0
         tenant_trans_pk = cls.__MPTTPL.get(appid)
         if tenant_trans_pk:
             for i in tenant_trans_pk:
                 tenant_trans = cls.__TENANTTRANS.get(i)
                 subsidy += tenant_trans['subsidy']
-        return subsidy
+        return str(subsidy)
 
     @classmethod
-    def __get_landlord_rent(cls, appid) -> int:
+    def __get_landlord_rent(cls, appid) -> str:
         subsidy = 0
         llr_pk = cls.__MPLLRPL.get(appid)
         if llr_pk:
             for i in llr_pk:
                 llr = cls.__LANDLORD_RENT.get(i)
                 subsidy += llr['subsidy']
-        return subsidy
+        return str(subsidy)
 
     @classmethod
-    def __get_landlord_retire(cls, appid) -> int:
+    def __get_landlord_retire(cls, appid) -> str:
         subsidy = 0
         llr_pk = cls.__MPLLRTPL.get(appid)
         if llr_pk:
             for i in llr_pk:
                 llr = cls.__LANDLORD_RETIRE.get(i)
                 subsidy += llr['subsidy']
-        return subsidy
+        return str(subsidy)
 
 
 
