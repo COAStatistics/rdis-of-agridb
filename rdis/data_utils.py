@@ -1,5 +1,7 @@
+import re
 import shelve
 from collections import namedtuple
+from pprint import pprint
 
 SAMPLE_ATTR = ['layer', 'name', 'tel', 'addr', 'county', 'town',
                'link_num', 'id', 'farmer_num', 'main_tpye', 'area', 'sample_num']
@@ -47,6 +49,9 @@ class DataGenerator:
         __MPLLRPL = f['member_pk_landlordrent_pk_link']
         __LANDLORD_RETIRE = f['landlordretire']
         __MPLLRTPL = f['member_pk_landlordretire_pk_link']
+
+    def __init__(self, num):
+        self.main = num
 
     @classmethod
     def is_exist(cls, appid) -> bool:
@@ -136,18 +141,81 @@ class DataGenerator:
     @classmethod
     def get_livestock(cls, appid):
         result = {}
+        raw_data = []
         livestock_pk = cls.__ALPL.get(appid)
         if livestock_pk:
             for i in livestock_pk:
-                livestock = [None] * 7
-                info = cls.__LIVESTOCK.get(i)
+                raw_data.append(cls.__LIVESTOCK.get(i))
+            if appid == 'Q122886811':
+                print(raw_data)
+            merge_data = DataGenerator.__merge_livestock(raw_data)
+            return DataGenerator.__make_livestock_data(merge_data)
+        else:
+            return result
+
+    @staticmethod
+    def __merge_livestock(data_set) -> dict:
+        merge_data = {}
+        for i in data_set:
+            key = (i['member'], i['field'], i['livestock'], i['year'], i['season'])
+            value = merge_data.get(key)
+            if value:
+                value['count_type'][i['count_type']] = i['value']
+            else:
+                merge_data[key] = {'count_type': {i['count_type']: i['value']}}
+        return merge_data
+
+    @staticmethod
+    def __make_livestock_data(data) -> dict:
+        result = {}
+        for k, v in data.items():
+            count_type = v['count_type']
+            livestock = [None] * 7
+            field_name = k[1]
+            livestock[0] = k[4]
+            livestock[1] = k[2]
+            livestock[2] = count_type.get('在養量', 0)
+            livestock[3] = count_type.get('屠宰量', 0)
+            livestock[4] = '無'
+            livestock[5] = 0
+            livestock[6] = '107' if k[3] == 2018 else '106'
+
+            if re.match('[^蛋].*[雞|鴨|鵝|鵪鶉|鴿]', livestock[1].strip()) or livestock[1].strip().find('蛋鴨') != -1:
+                if livestock[2] == 0:
+                    if livestock[3] == 0:
+                        break
+                    else:
+                        livestock[2] = '出清'
+                if livestock[1].strip() != '蛋雞':
+                    livestock[3] = ''
+
+            if count_type.get('產乳量', 0) != 0:
+                livestock[4] = '牛乳' if '牛' in livestock[1] else '羊乳'
+                livestock[5] = count_type['產乳量']
+
+            if count_type.get('產鹿角量', 0) != 0:
+                livestock[4] = '鹿茸'
+                livestock[5] = count_type['產鹿角量']
+
+            if count_type.get('產蛋量', 0) != 0:
+                livestock[4] = '蛋'
+                livestock[5] = count_type['產蛋量']
+
+            if field_name in result:
+                result.get(field_name).append(livestock)
+
+            else:
+                livestock_data = [livestock]
+                result[field_name] = livestock_data
+
+        return result
 
     @classmethod
-    def get_sb_subsidy(cls, member) -> list:
+    def get_sb_subsidy(cls, member, samp) -> list:
         tenant_trans = cls.__get_tenant_transfer(member['id'])
         landlord_rent = cls.__get_landlord_rent(member['id'])
         landlord_retire = cls.__get_landlord_retire(member['id'])
-        name = member['name'] if member['name'] else ''
+        name = samp.name if member['app_id'] == samp.id else ''
         return [name, tenant_trans, landlord_rent, landlord_retire]
 
     @classmethod
@@ -179,7 +247,6 @@ class DataGenerator:
                 llr = cls.__LANDLORD_RETIRE.get(i)
                 subsidy += llr['subsidy']
         return subsidy
-
 
 
 

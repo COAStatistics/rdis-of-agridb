@@ -1,5 +1,7 @@
+import json
 import linecache as lc
 import xlrd
+from collections import OrderedDict
 from datetime import date
 from data_utils import (
     DataGenerator as dg,
@@ -8,17 +10,19 @@ from data_utils import (
 
 YEAR = date.today().year
 INSURANCE_DICT = {}
+OFFICIAL_DATA = {}
 
 
 def init_data(num) -> None:
     """
     Read sample from txt file then pass line to simple_obj_creator fn
-    :param num: 3:main, 4:main_inv, 5:sub, 6:sub_inv
+    :param num: 1:main, 0:sub
     :return: None
     """
     path = 'info.txt'
+    num = 3 if num else 4
     file = lc.getline(path, num).strip()
-    load_insruance(lc.getline(path, 7).strip())
+    load_insurance(lc.getline(path, 7).strip())
     with open(file, encoding='utf8') as f:
         for i, line in enumerate(f):
             obj = simple_obj_creator(line, is_person=False)
@@ -27,11 +31,9 @@ def init_data(num) -> None:
                 extract_data(obj)
             else:
                 extract_data(obj, False)
-            if i == 0:
-                break
 
 
-def load_insruance(path):
+def load_insurance(path):
     wb = xlrd.open_workbook(path)
 
     for sheet_page in range(4):
@@ -123,6 +125,7 @@ def add_insurance(farm_id, amount, sheet_num):
 
 
 def extract_data(samp, exist=True):
+    birthday = ''
     members = []
     declaration = set()
     disaster = []
@@ -132,6 +135,7 @@ def extract_data(samp, exist=True):
 
     if exist:
         household = dg.get_household(samp.id)
+        birthday = int(list(filter(lambda x: x['app_id'] == samp.id, household))[0]['birth'][:4]) - 1911
         for member in household:
             person_data = member_data(member)
             members.append(person_data)
@@ -152,19 +156,21 @@ def extract_data(samp, exist=True):
             if livestock_data:
                 livestock.update(livestock_data)
 
-            sb_sbdy_data = dg.get_sb_subsidy(member)
+            sb_sbdy_data = dg.get_sb_subsidy(member, samp)
             if any(i > 0 for i in sb_sbdy_data[1:]):
                 sb_sbdy.append(sb_sbdy_data)
     else:
         person_data = member_data(samp, exist)
         members.append(person_data)
+    declaration = ','.join(list(declaration)) if declaration else ''
+    generate_json_data(samp, birthday, members, declaration, fallow_trans, disaster, livestock, sb_sbdy)
 
 
 def member_data(member, exist=True):
     person_data = [''] * 11
     appid = member['app_id'] if exist else member.id
     if exist:
-        person_data[0] = str(YEAR - int(member['birth'][:4]))
+        person_data[0] = int(member['birth'][:4]) - 1911
         person_data[1] = member['role']
         person_data[2] = member['code']
         person_data[3] = dg.get_farmer_insurance(member['id'])
@@ -178,7 +184,37 @@ def member_data(member, exist=True):
     return person_data
 
 
+def generate_json_data(sample, birthday, household, declaration, fallow_transfer, disaster, livestock, sb_sbdy):
+    data = OrderedDict()
+    data['name'] = sample.name
+    data['address'] = sample.addr
+    data['birthday'] = birthday
+    data['farmerId'] = sample.id
+    data['telephone'] = sample.tel
+    data['layer'] = sample.layer
+    data['serial'] = sample.farmer_num[-5:]
+    data['household'] = household
+    data['monEmp'] = []
+    data['declaration'] = declaration
+    data['cropSbdy'] = fallow_transfer
+    data['disaster'] = disaster
+    data['livestock'] = livestock
+    data['sbSbdy'] = sb_sbdy
+    OFFICIAL_DATA[sample.farmer_num] = data
+
+
+def output_josn_data(data) -> None:
+    file_name = '公務資料.json' if dg.main else '公務資料_備選.json'
+    path = r'../' + file_name
+    with open(path, 'w', encoding='utf8') as f:
+        f.write(json.dumps(data,  ensure_ascii=False))
+
+
 if __name__ == '__main__':
-    dg = dg()
-    sample_num = eval(input('sample_num = '))
+    while True:
+        sample_num = eval(input('main(1), or sub(0) = '))
+        if sample_num in [0, 1]:
+            break
+    dg = dg(sample_num)
     init_data(sample_num)
+    output_josn_data(OFFICIAL_DATA)
