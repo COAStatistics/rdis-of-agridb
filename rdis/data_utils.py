@@ -1,6 +1,7 @@
 import re
 import shelve
 from collections import namedtuple
+from log import log, err_log
 from pprint import pprint
 
 SAMPLE_ATTR = ['layer', 'name', 'tel', 'addr', 'county', 'town',
@@ -51,7 +52,34 @@ class DataGenerator:
         __MPLLRTPL = f['member_pk_landlordretire_pk_link']
 
     def __init__(self, num):
+        self.__empty_id = 0
+        self.__error_id = 0
+        self.__dead = 0
         self.main = num
+
+    @property
+    def empty_id(self):
+        return self.__empty_id
+
+    @empty_id.setter
+    def empty_id(self, i):
+        self.__empty_id += i
+
+    @property
+    def error_id(self):
+        return self.__error_id
+
+    @error_id.setter
+    def error_id(self, i):
+        self.__error_id += i
+
+    @property
+    def dead(self):
+        return self.__dead
+
+    @dead.setter
+    def dead(self, i):
+        self.__dead += i
 
     @classmethod
     def is_exist(cls, appid) -> bool:
@@ -68,9 +96,10 @@ class DataGenerator:
         household = []
         for i in cls.__HNMPL[sample['household']]:
             member = cls.__get_member(i)
-            member['code'] = cls.__CODE.get(member['code'])
-            member['role'] = cls.__ROLE.get(member['role'])
-            household.append(member)
+            clone = member.copy()
+            clone['code'] = cls.__CODE.get(member['code'])
+            clone['role'] = cls.__ROLE.get(member['role'])
+            household.append(clone)
         return household
 
     @classmethod
@@ -88,41 +117,43 @@ class DataGenerator:
             return ''
 
     @classmethod
-    def get_landlord_or_tenant(cls, appid):
+    def get_landlord_or_tenant(cls, member, year):
         sb = ''
-        if cls.__OTPTL.get(appid):
+        if cls.__OTPTL.get(member['id']):
             sb += '小'
-        if cls.__MPTPL.get(appid):
+        if cls.__MPTPL.get(member['id']) and (year - int(member['birth'][:4])) <= 55:
             sb += '大'
         return sb
 
     @classmethod
-    def get_declaration(cls, appid):
+    def get_declaration(cls, member):
         dcl = set()
-        trans_pk = cls.__DPTPL.get(cls.__MPDPL.get(appid))
+        trans_pk = cls.__DPTPL.get(cls.__MPDPL.get(member['id']))
         if trans_pk:
             for i in trans_pk:
                 tc = cls.__TRANSFER_CROP[i]
                 crop = cls.__CROP[tc['crop']]['name']
                 dcl.add(crop)
+            log.info('id=', member['id'], ', appid=', member['app_id'], ', declaration=', dcl)
         return dcl
 
     @classmethod
-    def get_fallow_transfer(cls, appid) -> list:
+    def get_fallow_transfer(cls, member) -> list:
         fallow_trans = []
-        trans_pk = cls.__MPFTPK.get(appid)
+        trans_pk = cls.__MPFTPK.get(member['id'])
         if trans_pk:
             for i in trans_pk:
                 trans = cls.__FALLOW_TRANSFPER.get(i)
                 crop = cls.__CROP[trans['crop']]['name']
                 fallow_trans.append([crop, str(trans['subsidy']), trans['period']])
+            log.info('id=', member['id'], ', appid=', member['app_id'], ', fallow_transfer=', fallow_trans)
         return fallow_trans
 
     @classmethod
-    def get_disaster(cls, appid) -> list:
-        reuslt = []
+    def get_disaster(cls, member) -> list:
+        result = []
         disaster = {}
-        disaster_pk = cls.__MDPL.get(appid)
+        disaster_pk = cls.__MDPL.get(member['id'])
         if disaster_pk:
             for i in disaster_pk:
                 dis = cls.__DISASTER[i]
@@ -140,21 +171,22 @@ class DataGenerator:
             for i in disaster.values():
                 i[2] = str(i[2])
                 i[3] = str(i[3])
-                reuslt.append(i)
-        return reuslt
+                result.append(i)
+            log.info('id=', member['id'], ', appid=', member['app_id'], ', disaster=', result)
+        return result
 
     @classmethod
-    def get_livestock(cls, appid):
+    def get_livestock(cls, member):
         result = {}
         raw_data = []
-        livestock_pk = cls.__ALPL.get(appid)
+        livestock_pk = cls.__ALPL.get(member['app_id'])
         if livestock_pk:
             for i in livestock_pk:
                 raw_data.append(cls.__LIVESTOCK.get(i))
-            if appid == 'Q122886811':
-                print(raw_data)
             merge_data = DataGenerator.__merge_livestock(raw_data)
-            return DataGenerator.__make_livestock_data(merge_data)
+            data = DataGenerator.__make_livestock_data(merge_data)
+            log.info('id=', member['id'], ', appid=', member['app_id'], ', livestock=', data)
+            return data
         else:
             return result
 
@@ -176,9 +208,9 @@ class DataGenerator:
         for k, v in data.items():
             count_type = v['count_type']
             livestock = [None] * 7
-            field_name = k[1]
-            livestock[0] = k[4]
-            livestock[1] = k[2]
+            field_name = k[1] if k[1] else '無'
+            livestock[0] = DataGenerator.__replace_season_name(k[4])
+            livestock[1] = DataGenerator.__replace_livestock_name(k[2])
             livestock[2] = str(count_type.get('在養量', 0))
             livestock[3] = str(count_type.get('屠宰量', 0))
             livestock[4] = '無'
@@ -215,13 +247,35 @@ class DataGenerator:
 
         return result
 
+    @staticmethod
+    def __replace_livestock_name(raw_name) -> str:
+        name = raw_name
+        if name in ['種公豬', '種母豬']:
+            name = '種豬'
+        elif name == '種女豬':
+            name = '女豬'
+        elif name in ['哺乳小豬', '30公斤以下小豬', '30-60公斤中豬', '60公斤以上大豬']:
+            name = '肉豬'
+        return name
+
+    @staticmethod
+    def __replace_season_name(raw_name) -> str:
+        name = raw_name
+        if name == 'M2':
+            name = 'M5'
+        elif name == 'M4':
+            name = 'M11'
+        return name
+
     @classmethod
     def get_sb_subsidy(cls, member, samp) -> list:
         tenant_trans = cls.__get_tenant_transfer(member['id'])
         landlord_rent = cls.__get_landlord_rent(member['id'])
         landlord_retire = cls.__get_landlord_retire(member['id'])
         name = samp.name if member['app_id'] == samp.id else ''
-        return [name, tenant_trans, landlord_rent, landlord_retire]
+        sb_data = [name, tenant_trans, landlord_rent, landlord_retire]
+        log.info('id=', member['id'], ', appid=', member['app_id'], ', sb_subsidy=', sb_data)
+        return sb_data
 
     @classmethod
     def __get_tenant_transfer(cls, appid) -> str:
@@ -252,6 +306,3 @@ class DataGenerator:
                 llr = cls.__LANDLORD_RETIRE.get(i)
                 subsidy += llr['subsidy']
         return str(subsidy)
-
-
-

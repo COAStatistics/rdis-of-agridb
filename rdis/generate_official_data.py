@@ -4,13 +4,15 @@ import xlrd
 from collections import OrderedDict
 from datetime import date
 from data_utils import (
-    DataGenerator as dg,
+    DataGenerator,
     simple_obj_creator,
 )
+from log import log, err_log
 
 YEAR = date.today().year
 INSURANCE_DICT = {}
 OFFICIAL_DATA = {}
+DEAD_LIST = []
 
 
 def init_data(num) -> None:
@@ -26,10 +28,16 @@ def init_data(num) -> None:
     with open(file, encoding='utf8') as f:
         for i, line in enumerate(f):
             obj = simple_obj_creator(line, is_person=False)
+            if obj.id == '':
+                dg.empty_id = 1
+                err_log.error('id is empty, ', 'name=', obj.name, ', farmer_num=', obj.farmer_num)
+
             exist = dg.is_exist(obj.id)
             if exist:
                 extract_data(obj)
             else:
+                dg.error_id = 1
+                err_log.error('not in household, ', 'id=', obj.id, ', name=', obj.name, ', farmer_num=', obj.farmer_num)
                 extract_data(obj, False)
 
 
@@ -137,22 +145,27 @@ def extract_data(samp, exist=True):
         household = dg.get_household(samp.id)
         birthday = int(list(filter(lambda x: x['app_id'] == samp.id, household))[0]['birth'][:4]) - 1911
         for member in household:
+            if member['code'] == '死亡':
+                DEAD_LIST.append(member['app_id'])
+                dg.dead = 1
+
+            log.info(member)
             person_data = member_data(member)
             members.append(person_data)
 
-            declaration_data = dg.get_declaration(member['id'])
+            declaration_data = dg.get_declaration(member)
             if declaration_data:
                 declaration = declaration.union(declaration_data)
 
-            trans_crop_data = dg.get_fallow_transfer(member['id'])
+            trans_crop_data = dg.get_fallow_transfer(member)
             if trans_crop_data:
                 fallow_trans.extend(trans_crop_data)
 
-            disaster_data = dg.get_disaster(member['id'])
+            disaster_data = dg.get_disaster(member)
             if disaster_data:
                 disaster.extend(disaster_data)
 
-            livestock_data = dg.get_livestock(member['app_id'])
+            livestock_data = dg.get_livestock(member)
             if livestock_data:
                 livestock.update(livestock_data)
 
@@ -175,11 +188,11 @@ def member_data(member, exist=True):
         person_data[2] = member['code']
         person_data[3] = dg.get_farmer_insurance(member['id'])
         person_data[4] = dg.get_elder_allowance(member['id'])
-        person_data[10] = dg.get_landlord_or_tenant(member['id'])
+        person_data[10] = dg.get_landlord_or_tenant(member, YEAR)
 
     if appid in INSURANCE_DICT:
         for index, i in enumerate(INSURANCE_DICT.get(appid), start=5):
-            if i > 0:
+            if i > 0 or i < 0:
                 person_data[index] = format(i, '8,d')
     return person_data
 
@@ -215,6 +228,13 @@ if __name__ == '__main__':
         sample_num = eval(input('main(1), or sub(0) = '))
         if sample_num in [0, 1]:
             break
-    dg = dg(sample_num)
+    dg = DataGenerator(sample_num)
     init_data(sample_num)
-    # output_josn_data(OFFICIAL_DATA)
+    log.info('empty_id=', dg.empty_id)
+    log.info('error_id=', dg.error_id)
+    log.info('dead=', dg.dead)
+    log.info('[end]')
+    with open('../dead.txt', 'w') as f:
+        for i in DEAD_LIST:
+            f.write(i + '\n')
+    output_josn_data(OFFICIAL_DATA)

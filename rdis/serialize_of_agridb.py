@@ -38,11 +38,15 @@ def get_all_data(db) -> chain:
     return chain(*data_list)
 
 
-def dump_data(name, key):
+def dump_data(name, key=None):
     data = get_all_data(name)
     d = {}
-    for i in data:
-        d[i[key]] = i
+    if key:
+        for i in data:
+            d[i[key]] = i
+    else:
+        for index, i in enumerate(data, start=1):
+            d[index] = i
     with shelve.open('../agridb') as f:
         f[name] = d
 
@@ -67,9 +71,14 @@ def create_relation(name, relation_name, key, val, group=True):
     d = {}
     with shelve.open('../agridb') as f:
         if group:
-            for i in data.values():
-                if i.get(key):
-                    d[i[key]] = d.get(i[key], []) + [i[val]]
+            if val == 'key':
+                for k, v in data.items():
+                    if v.get(key):
+                        d[v[key]] = d.get(v[key], []) + [k]
+            else:
+                for i in data.values():
+                    if i.get(key):
+                        d[i[key]] = d.get(i[key], []) + [i[val]]
             f[relation_name] = d
         else:
             for i in data.values():
@@ -89,6 +98,6 @@ def inspection_distinct(table_name):
 
 
 if __name__ == '__main__':
-    # dump_data('fallowtransfer', 'id')
-    create_relation('fallowtransfer', 'member_pk_fallowtransfer_pk_link', 'member', 'id')
-    pprint(load_data('member_pk_fallowtransfer_pk_link'))
+    # dump_data('livestock_result')
+    # create_relation('livestock_result', 'appid_livestock_pk_link', 'member', 'key')
+    pprint(load_data('appid_livestock_pk_link'))
